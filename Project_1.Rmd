@@ -1,0 +1,305 @@
+---
+title: "Appendix Code"
+output: pdf_document
+---
+
+```{r setup, include=FALSE}
+knitr::opts_chunk$set(echo = TRUE)
+```
+
+```{r, echo=FALSE, include = FALSE}
+#library
+library(expss)
+library(pracma)
+library(knitr)
+library(MASS)
+library(pander)
+library(ggplot2)
+```
+
+```{r}
+
+const=0.65*(2*32.2)^0.5
+
+# Parameters: time
+# Output: This is the initial Inflow
+
+Q_in = function(t){
+  c = 750/pi
+  c*(1-cos((pi*t)/4500))
+}
+
+# Parameters: Cross sectional area and height
+# Output: This is the outflow for one area and one height
+Q_out = function(a,H){
+  g=32.2
+  0.65*a*(2*g*H)^0.5
+}
+
+
+# Parameters: cross sectional area and timestep
+# Output: Maximum height one value
+
+hmax_finder = function(A,dt){
+  S = 0
+  h = 0
+  t = seq(0, 9000, by=dt)
+  Q = Q_in(t)
+  max_time_element = 0
+  max_t = 0
+
+
+  for (j in 1:length(t)){
+    S[j+1] = S[j] + ((Q[j] + Q[j+1])*0.5 - const*A*(h[j]^0.5)) *dt
+    h[j+1] = S[j+1]/360000
+  }
+  h = h[1:length(h)-1]
+  return (max(h))
+}
+
+# Parameters: cross sectional area and timestep
+# Output: maximum time one value
+
+tmax_finder = function(A,dt){
+  S = 0
+  h = 0
+  t = seq(0, 9000, by=dt)
+  Q = Q_in(t)
+  max_time_element = 0
+  max_t = 0
+  for (j in 1:length(t)){
+    S[j+1] = S[j] + ((Q[j] + Q[j+1])*0.5 - const*A*(h[j]^0.5)) *dt
+    h[j+1] = S[j+1]/360000
+  }
+  h = h[1:length(h)-1]
+  
+  max_time_element = match(max(h),h)
+  max_t = t[max_time_element]
+  return (max_t)
+}
+
+# Parameters: cross sectional area and max height
+# Output: Q peak one value
+
+Q_peak_finder = function(Area,hmax){
+  Q_peak=0
+  
+  for (i in 1:length(Area)){
+    Q_peak[i] = Q_out(Area[i],hmax[i])
+  }
+  return(Q_peak)
+}
+
+# Parameters: Area, timestep
+# Output: A bunch of points for outflow
+
+Q_outflow_finder = function(A,dt){
+  S = 0
+  h = 0
+  t = seq(0, 9000, by=dt)
+  Q = Q_in(t)
+  Qo = 0
+
+
+  for (j in 1:length(t)){
+    S[j+1] = S[j] + ((Q[j] + Q[j+1])*0.5 - const*A*(h[j]^0.5)) *dt
+    h[j+1] = S[j+1]/360000
+  }
+  h = h[1:length(h)-1]
+  Qo = Q_out(A,h)
+  return (Qo)
+}
+
+# Input A and dt,
+# num = 1 gives Q outflow to empty
+# num = 2 gives h to empty
+# num = 3 gives t to empty
+Q_outflow_finder_toempty = function(A,dt,num){
+  S = 0
+  h = 0
+  t = 0
+  qt = c(seq(0, 9000, by=dt),rep(0,10000))
+  Q = Q_in(qt)
+  Qo = 0
+  j = 1
+
+  repeat{
+    S[j+1] = S[j] + ((Q[j] + Q[j+1])*0.5 - const*A*(h[j]^0.5)) *dt
+    h[j+1] = S[j+1]/360000
+    t[j+1] = t[j] + dt
+    j=j+1
+    if (S[j]<0){
+      break
+    }
+  }
+  h = h[1:length(h)-1]
+  t = t[1:length(t)-1]
+  Qo = Q_out(A,h)
+
+  if (num == 1 ) { 
+    return (Qo)
+    } else if (num == 2) {
+    return (h)
+    } else if  (num == 3) {
+    return (t)
+    } else {
+    print('please pick an option')
+}
+}
+
+
+```
+
+
+
+```{r}
+
+D_orifice = seq(1.5,5, by =0.5)
+cross_A = (pi*D_orifice^2)/4
+Area = 600*600
+h_max = 0
+t_max = 0
+
+DT= 9000/300
+t_proj = seq(0,9000, by =DT)
+
+#First find the max heights for respective orifice diameter
+
+for (j in 1: length(cross_A)){
+  h_max[j] = hmax_finder(cross_A[j],DT)
+}
+
+# Then find the peak Outflow
+
+Q_peak = Q_peak_finder(cross_A,h_max)
+
+# Next find the time to peak 
+for (j in 1: length(cross_A)){
+  t_max[j] = tmax_finder(cross_A[j],DT)
+}
+
+
+#Next find the main inflow wave with 3 different outflow curves
+Q_inflow = Q_in(t_proj)
+Q_outflow_2 = Q_outflow_finder(cross_A[2],DT)
+Q_outflow_3 = Q_outflow_finder(cross_A[4],DT)
+Q_outflow_4 = Q_outflow_finder(cross_A[6],DT)
+  
+Q_to_empty_D3 = Q_outflow_finder_toempty(cross_A[4],DT,1)
+h_to_empty_D3 = Q_outflow_finder_toempty(cross_A[4],DT,2)
+t_to_empty_D3 = Q_outflow_finder_toempty(cross_A[4],DT,3)
+
+print(Q_to_empty_D3[1700:1705])
+```
+
+
+```{r, fig.show='hide'}
+storage = h_max*360000 /1000
+plot(D_orifice,storage,type='b', 
+     col='blue',
+     main = 'Graph of Max Storage versus Diameter', 
+     xlab = expression('Diameter (ft)'), 
+     ylab = expression('S ' * x10^3*'('*ft^3*')'),
+)
+```
+
+```{r, fig.show='hide'}
+
+plot(D_orifice,Q_peak,type='b', 
+     col='blue',
+     main = 'Graph of Peak Outflow versus Diameter', 
+     xlab = expression('Diameter (ft)'), 
+     ylab = expression('Peak Flowrate, Q '*'('*ft^3*'/s)'),
+     yaxp = c(0,200,5)
+
+)
+```
+
+
+
+
+```{r, fig.show='hide'}
+
+plot(D_orifice,t_max,type='b', 
+     col='blue',
+     main = 'Graph of Time to peak outflow versus Diameter', 
+     xlab = expression('Diameter (ft)'), 
+     ylab = expression('Time to Peak Outflow (s)'),
+)
+```
+
+
+
+```{r, fig.show='hide'}
+
+# plot the first curve by calling plot() function
+# First curve is plotted
+ plot(t_proj, Q_inflow, type="l", col="blue", lty=1, lwd = 3, ylim=c(0,500), main = 'Graph of Flowrates vs time', 
+     xlab = expression('Time (s)'), 
+     ylab = expression('Flowrate, Q '*'('*ft^3*'/s)'))
+
+ lines(t_proj, Q_outflow_4, col="red",lty=1,lwd = 1)
+
+
+ lines(t_proj, Q_outflow_3, col="dark red", lty=1,lwd = 1)
+ 
+
+ lines(t_proj, Q_outflow_2, col="black", lty=1,lwd = 1)
+
+ 
+# Adding a legend inside box at the location (2,40) in graph coordinates.
+# Note that the order of plots are maintained in the vectors of attributes.
+legend(2,450,legend=c("Q_in","D = 4","D = 3","D = 2"), col=c("blue","red","dark red","black"),
+                                   lty=c(1,1,1,1), ncol=1)
+
+```
+
+
+
+```{r, fig.show='hide'}
+
+# plot the first curve by calling plot() function
+# First curve is plotted
+t_thousands = t_to_empty_D3/1000
+t_thousands2 = t_proj / 1000
+ plot(t_thousands, Q_to_empty_D3, type="l", col="blue", lty=3, lwd = 1, ylim=c(0,500), main = 'Graph of Flowrates vs time', 
+     xlab = expression('Time '*'x '*10^3*'(s)'), 
+     ylab = expression('Flowrate, Q '*' ('*ft^3*'/s)'))
+
+ lines(t_thousands2, Q_inflow, col="red",lty=1,lwd = 1)
+ 
+ legend(40,450,legend=c("D = 3","Q_in"), col=c("blue","red"),
+                                   lty=c(3,1), ncol=1)
+```
+
+
+```{r, fig.show='hide'}
+
+plot(t_thousands,h_to_empty_D3,type='l', 
+     col='blue',
+     main = 'Graph of Storage emptying versus Time', 
+     xlab = expression('Time '*'x '*10^3*'(s)'), 
+     ylab = expression('Height, h (ft)')
+
+)
+```
+
+```{r, fig.show='hide'}
+Q_to_empty_D2 = Q_outflow_finder_toempty(cross_A[2],DT,1)
+h_to_empty_D2 = Q_outflow_finder_toempty(cross_A[2],DT,2)
+t_to_empty_D2 = Q_outflow_finder_toempty(cross_A[2],DT,3)
+t_thousands = t_to_empty_D2/1000
+
+ plot(t_thousands, Q_to_empty_D2, type="l", col="blue", lty=1, lwd = 1, main = 'Graph of Flowrate vs time', 
+     xlab = expression('Time (s)'), 
+     ylab = expression('Flowrate, Q '*'('*ft^3*'/s)'))
+
+```
+
+```{r, fig.show='hide'}
+ plot(t_thousands, h_to_empty_D2, type="l", col="blue", lty=1, lwd = 1, main = 'Graph of height vs time', 
+     xlab = expression('Time (s)'), 
+     ylab = expression('Height, h (ft)'))
+
+```
+
