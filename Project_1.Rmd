@@ -192,6 +192,7 @@ t_to_empty_D3 = Q_outflow_finder_toempty(cross_A[4],DT,3)
 print(Q_to_empty_D3[1700:1705])
 ```
 
+                                                        ##############   let the plotting begin  #################
 
 ```{r, fig.show='hide'}
 storage = h_max*360000 /1000
