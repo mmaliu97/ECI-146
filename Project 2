@@ -1,0 +1,198 @@
+---
+title: "Project 2"
+output: word_document
+---
+
+```{r setup, include=FALSE}
+knitr::opts_chunk$set(echo = TRUE)
+```
+
+
+```{r, echo=FALSE, include = FALSE}
+#library
+library(expss)
+library(pracma)
+library(knitr)
+library(MASS)
+library(pander)
+library(ggplot2)
+```
+
+
+
+```{r}
+## Define global variables
+const=0.65*(2*32.2)^0.5
+cross_A = (pi*3^2)/4  #ft^2
+Area = 600*600  #ft^2
+total_duration = 15050 # s
+storm_duration = 9000 # s
+N = 499
+DT= total_duration/N
+time = c(seq(0, total_duration, by=DT))
+density = 102 #lb/ft^3
+
+  
+# since after 9000seconds the storm stops, we must extend Q inflow to be 0 for the remaining duration
+t_extend = ceiling((total_duration - storm_duration)/DT)
+
+
+```
+
+```{r}
+
+
+# Parameters: time
+# Output: This is the initial Inflow
+
+Q_in = function(t){
+  a = 750/pi
+  a*(1-cos((pi*t)/4500))
+}
+
+# Parameters: Cross sectional area and height
+# Output: This is the outflow for one area and one height
+Q_out = function(a,H){
+  g=32.2
+  0.65*a*((2*g*H)^0.5)
+}
+
+
+```
+
+```{r}
+# Input A and dt,
+# num = 1 gives Q outflow to empty
+# num = 2 gives h to empty
+# num = 3 gives t to empty
+ulti = function(A,dt){
+  S = 0
+  h = 0
+  t = 0
+  t_in = c(seq(0, 9000, by=dt))
+  
+  # Now we find the Q inflow for the entire storm duration
+  Q = c(Q_in(t_in),rep(0,t_extend))
+  Co = rep(0,length(time))
+  Ci = 0.7*(Q^0.64)
+  CS = rep(0,length(time))
+  r = 9.15*10^-4
+  m = rep(0,length(time))
+
+  # Find the Qout 
+  for (j in 1:length(time)){
+    S[j+1] = S[j] + ((Q[j] + Q[j+1])*0.5 - const*A*(h[j]^0.5))*dt
+    h[j+1] = S[j+1]/360000
+  }
+
+  h = h[1:length(h)-1]
+  S = S[1:length(S)-1]
+
+  Qo = Q_out(cross_A,h)
+  # Find CS to get Co
+  for (k in 1:length(time)){
+
+    CS[k+1] = CS[k] + (Ci[k]*Q[k] - Co[k]*Qo[k] - r*CS[k])*dt
+    Co[k+1] = CS[k+1]/S[k+1]
+    m[k+1] = m[k] +CS[k+1]*r*dt
+    
+
+  }
+  CS = CS[1:length(CS)-1]
+  Co = Co[1:length(Co)-1]
+  m = m[1:length(m)-1]
+  
+
+
+  #With Storage, Qout, Qin, we can find the Sedimentation
+
+  rCS = r*CS
+  
+  return(list(C_outflow=Co,
+              height=h,
+              storage=S,
+              Q_inflow=Q,
+              C_inflow=Ci,
+              Q_outflow=Qo,
+              sediment=rCS,
+              CS=CS,
+              m=m))
+
+}
+
+
+```
+
+
+```{r}
+
+Q_inflow = ulti(cross_A,DT)$Q_inflow
+Q_outflow = ulti(cross_A,DT)$Q_outflow
+
+C_inflow = ulti(cross_A,DT)$C_inflow
+C_outflow = ulti(cross_A,DT)$C_outflow
+
+rCS = ulti(cross_A,DT)$sediment
+h = ulti(cross_A,DT)$height
+S = ulti(cross_A,DT)$storage
+CS = ulti(cross_A,DT)$CS
+m = ulti(cross_A,DT)$m
+```
+
+
+```{r, fig.show='hide'}
+mass = (cumtrapz(time,rCS))/10^7
+plot(time,mass,type='l', 
+     col='blue',
+     main = 'Graph of mass of sediment over time', 
+     xlab = expression('Time (s)'), 
+     ylab="",
+)
+ylab = expression('Mass'*' x '*10^7*'(lb)')
+mtext(side=2, line=2, ylab, font=1, cex=1)
+```
+
+```{r, fig.show='hide'}
+
+# plot the first curve by calling plot() function
+# First curve is plotted
+ plot(time, C_inflow, type="l", col="blue", lty=1, ylim=c(0,40), main = 'Graph of Flowrates vs time', 
+     xlab = expression('Time (s)'), 
+     ylab = expression('Concentration '*' ('*lb/ft^3*')')
+     )
+
+ lines(time, C_outflow, col="red",lty=1,lwd = 1)
+
+reduc = (max(C_inflow) - max(C_outflow))/max(C_inflow)
+
+ 
+# Adding a legend inside box at the location (2,40) in graph coordinates.
+# Note that the order of plots are maintained in the vectors of attributes.
+legend(12000,40,legend=c("C_in","C_out"), col=c("blue","red"),
+                                   lty=c(1,1), ncol=1)
+
+```
+
+
+```{r}
+mass_in = trapz(time,C_inflow*Q_inflow)
+
+mass_out = trapz(time,C_outflow*Q_outflow)
+mass_dep = trapz(time,rCS)
+
+# suspended mass at 15050s
+mass_15050s = C_outflow[500]*S[500]
+
+
+ans = mass_in - mass_out - mass_dep
+
+extra_height = mass_dep/(Area*density)
+
+mass_in
+mass_out
+mass_dep
+ans
+max(C_inflow)
+max(C_outflow)
+```
+
